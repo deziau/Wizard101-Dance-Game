@@ -337,11 +337,13 @@ def run_calibration(config: Config) -> Config:
         return config
 
     messagebox.showinfo(
-        "Calibration - Scroll Region",
-        "Draw a rectangle around the area where arrows scroll.\n\n"
-        "Click and drag from top-left to bottom-right.",
+        "Calibration - Arrow Area",
+        "Draw a rectangle around the area where the arrow\n"
+        "appears during the SHOW phase of the dance game.\n\n"
+        "This is the spot where each arrow is displayed\n"
+        "one at a time for you to memorize.",
     )
-    selector = RegionSelector(screenshot, "Select the arrow scroll region")
+    selector = RegionSelector(screenshot, "Select the arrow display area")
     region_result = selector.run()
     if region_result is None:
         messagebox.showerror("Error", "No region selected.")
@@ -350,17 +352,6 @@ def run_calibration(config: Config) -> Config:
 
     x, y, w, h = region_result
     config.capture_region = CaptureRegion(x=x, y=y, width=w, height=h)
-
-    messagebox.showinfo(
-        "Calibration - Hit Zone",
-        "Click on the hit zone position — the spot where\n"
-        "you need to press the arrow key.\n\n"
-        "Click on the left side where the arrow target is.",
-    )
-    point_sel = PointSelector(screenshot, config.capture_region, "Click the hit zone position")
-    hit_x = point_sel.run()
-    if hit_x is not None:
-        config.hit_zone_x = hit_x
 
     messagebox.showinfo(
         "Calibration - Arrow Template",

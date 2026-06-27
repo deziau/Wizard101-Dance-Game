@@ -8,13 +8,6 @@ ARROW_SYMBOLS = {
     "right": "→",
 }
 
-ARROW_COLORS = {
-    "up": "#FF4444",
-    "down": "#44AAFF",
-    "left": "#44FF44",
-    "right": "#FFAA00",
-}
-
 
 class ArrowOverlay:
     def __init__(self):
@@ -22,8 +15,19 @@ class ArrowOverlay:
         self.root.title("Dance Helper")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#1a1a2e")
-        self.root.geometry("400x80+10+10")
+        self.root.geometry("500x100+10+10")
         self.root.resizable(True, False)
+
+        self._phase_label = tk.Label(
+            self.root,
+            text="IDLE",
+            bg="#16213e",
+            fg="#888888",
+            anchor="w",
+            padx=10,
+            pady=2,
+        )
+        self._phase_label.pack(fill=tk.X)
 
         self._label = tk.Label(
             self.root,
@@ -49,18 +53,31 @@ class ArrowOverlay:
         self._status.pack(fill=tk.X)
 
     def _update_font(self):
-        fnt = tkfont.Font(family="Consolas", size=24, weight="bold")
+        fnt = tkfont.Font(family="Consolas", size=22, weight="bold")
         self._label.configure(font=fnt)
 
-    def update_arrows(self, directions: list[str], raw_directions: list[str] | None = None) -> None:
-        if directions:
-            text = "  ".join(ARROW_SYMBOLS.get(d, "?") for d in directions)
-            self._label.configure(text=text, fg="#FFFFFF")
-        elif raw_directions:
-            text = "  ".join(ARROW_SYMBOLS.get(d, "?") for d in raw_directions)
-            self._label.configure(text=text, fg="#AAAAFF")
-        else:
+    def show_sequence(self, sequence: list[str], phase: str, input_index: int = 0) -> None:
+        self._phase_label.configure(text=phase.upper())
+
+        if not sequence:
             self._label.configure(text="Waiting for arrows...", fg="#e0e0e0")
+            return
+
+        symbols = [ARROW_SYMBOLS.get(d, "?") for d in sequence]
+        text = "  ".join(symbols)
+        self._label.configure(text=text)
+
+        if phase == "recording":
+            self._label.configure(fg="#FFFF44")
+            self._phase_label.configure(text=f"RECORDING... ({len(sequence)} arrows)", fg="#FFFF44")
+        elif phase == "ready":
+            self._label.configure(fg="#44FF44")
+            self._phase_label.configure(text=f"SEQUENCE READY ({len(sequence)} arrows) - enter them now!", fg="#44FF44")
+        elif phase == "inputting":
+            self._label.configure(fg="#44AAFF")
+            self._phase_label.configure(text=f"AUTO-INPUT {input_index}/{len(sequence)}", fg="#44AAFF")
+        else:
+            self._label.configure(fg="#e0e0e0")
 
     def set_status(self, text: str) -> None:
         self._status.configure(text=text)

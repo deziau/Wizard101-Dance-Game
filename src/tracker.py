@@ -1,100 +1,92 @@
 import time
-from dataclasses import dataclass, field
+from enum import Enum
 from src.detector import Detection
 
 
-@dataclass
-class TrackedArrow:
-    id: int
-    direction: str
-    first_seen_x: float
-    last_seen_x: float
-    first_seen_time: float
-    last_seen_time: float
-    actioned: bool = False
-    frames_missing: int = 0
+class Phase(Enum):
+    IDLE = "idle"
+    RECORDING = "recording"
+    READY = "ready"
+    INPUTTING = "inputting"
+
+
+class SequenceRecorder:
+    def __init__(self, no_arrow_threshold: int = 15):
+        self.no_arrow_threshold = no_arrow_threshold
+        self._sequence: list[str] = []
+        self._phase = Phase.IDLE
+        self._current_arrow: str | None = None
+        self._frames_without_arrow = 0
+        self._input_index = 0
 
     @property
-    def velocity(self) -> float:
-        dt = self.last_seen_time - self.first_seen_time
-        if dt <= 0:
-            return 0.0
-        return (self.first_seen_x - self.last_seen_x) / dt
+    def phase(self) -> Phase:
+        return self._phase
 
+    @property
+    def sequence(self) -> list[str]:
+        return list(self._sequence)
 
-class SequenceTracker:
-    def __init__(self, hit_zone_x: int, matching_radius: int = 40, expire_frames: int = 15):
-        self.hit_zone_x = hit_zone_x
-        self.matching_radius = matching_radius
-        self.expire_frames = expire_frames
-        self._tracks: list[TrackedArrow] = []
-        self._next_id = 0
-        self._pending_actions: list[TrackedArrow] = []
+    @property
+    def input_index(self) -> int:
+        return self._input_index
 
-    def update(self, detections: list[Detection], timestamp: float | None = None) -> None:
-        ts = timestamp or time.time()
-        self._pending_actions.clear()
+    def update(self, detections: list[Detection]) -> None:
+        best = self._pick_best_detection(detections)
 
-        matched_track_ids: set[int] = set()
-        matched_det_indices: set[int] = set()
+        if self._phase == Phase.IDLE:
+            if best is not None:
+                self._phase = Phase.RECORDING
+                self._sequence.clear()
+                self._current_arrow = best.direction
+                self._sequence.append(best.direction)
+                self._frames_without_arrow = 0
 
-        for i, det in enumerate(detections):
-            best_track = None
-            best_dist = float("inf")
-            for track in self._tracks:
-                if track.id in matched_track_ids:
-                    continue
-                if track.direction != det.direction:
-                    continue
-                dx = abs(det.x - track.last_seen_x)
-                if dx < self.matching_radius and dx < best_dist:
-                    best_dist = dx
-                    best_track = track
-            if best_track is not None:
-                best_track.last_seen_x = det.x
-                best_track.last_seen_time = ts
-                best_track.frames_missing = 0
-                matched_track_ids.add(best_track.id)
-                matched_det_indices.add(i)
+        elif self._phase == Phase.RECORDING:
+            if best is not None:
+                self._frames_without_arrow = 0
+                if best.direction != self._current_arrow:
+                    self._current_arrow = best.direction
+                    self._sequence.append(best.direction)
+            else:
+                self._frames_without_arrow += 1
+                if self._frames_without_arrow >= self.no_arrow_threshold:
+                    self._phase = Phase.READY
+                    self._current_arrow = None
+                    self._input_index = 0
 
-        for i, det in enumerate(detections):
-            if i in matched_det_indices:
-                continue
-            new_track = TrackedArrow(
-                id=self._next_id,
-                direction=det.direction,
-                first_seen_x=det.x,
-                last_seen_x=det.x,
-                first_seen_time=ts,
-                last_seen_time=ts,
-            )
-            self._tracks.append(new_track)
-            self._next_id += 1
+        elif self._phase == Phase.READY:
+            pass
 
-        expired = []
-        for track in self._tracks:
-            if track.id not in matched_track_ids and track.last_seen_time < ts:
-                track.frames_missing += 1
-                if track.frames_missing > self.expire_frames:
-                    expired.append(track)
+        elif self._phase == Phase.INPUTTING:
+            if self._input_index >= len(self._sequence):
+                self._phase = Phase.IDLE
+                self._sequence.clear()
 
-        for track in expired:
-            self._tracks.remove(track)
+    def _pick_best_detection(self, detections: list[Detection]) -> Detection | None:
+        if not detections:
+            return None
+        return max(detections, key=lambda d: d.confidence)
 
-        for track in self._tracks:
-            if not track.actioned and track.last_seen_x <= self.hit_zone_x:
-                track.actioned = True
-                self._pending_actions.append(track)
+    def start_input(self) -> None:
+        if self._phase == Phase.READY and self._sequence:
+            self._phase = Phase.INPUTTING
+            self._input_index = 0
 
-    def get_hit_zone_arrows(self) -> list[TrackedArrow]:
-        return list(self._pending_actions)
-
-    def get_upcoming_sequence(self) -> list[TrackedArrow]:
-        active = [t for t in self._tracks if not t.actioned]
-        active.sort(key=lambda t: t.last_seen_x)
-        return active
+    def get_next_input(self) -> str | None:
+        if self._phase != Phase.INPUTTING:
+            return None
+        if self._input_index >= len(self._sequence):
+            return None
+        direction = self._sequence[self._input_index]
+        self._input_index += 1
+        if self._input_index >= len(self._sequence):
+            self._phase = Phase.IDLE
+        return direction
 
     def reset(self) -> None:
-        self._tracks.clear()
-        self._pending_actions.clear()
-        self._next_id = 0
+        self._sequence.clear()
+        self._phase = Phase.IDLE
+        self._current_arrow = None
+        self._frames_without_arrow = 0
+        self._input_index = 0

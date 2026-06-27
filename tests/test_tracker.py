@@ -1,76 +1,100 @@
 import unittest
 from src.detector import Detection
-from src.tracker import SequenceTracker
+from src.tracker import SequenceRecorder, Phase
 
 
-class TestSequenceTracker(unittest.TestCase):
+class TestSequenceRecorder(unittest.TestCase):
     def setUp(self):
-        self.tracker = SequenceTracker(hit_zone_x=80, matching_radius=40, expire_frames=5)
+        self.recorder = SequenceRecorder(no_arrow_threshold=5)
 
-    def test_new_detection_creates_track(self):
-        detections = [Detection("up", 400, 50, 0.9, 30, 30)]
-        self.tracker.update(detections, timestamp=1.0)
-        upcoming = self.tracker.get_upcoming_sequence()
-        self.assertEqual(len(upcoming), 1)
-        self.assertEqual(upcoming[0].direction, "up")
+    def test_starts_idle(self):
+        self.assertEqual(self.recorder.phase, Phase.IDLE)
+        self.assertEqual(self.recorder.sequence, [])
 
-    def test_matching_detection_updates_track(self):
-        self.tracker.update([Detection("up", 400, 50, 0.9, 30, 30)], timestamp=1.0)
-        self.tracker.update([Detection("up", 380, 50, 0.9, 30, 30)], timestamp=1.05)
-        upcoming = self.tracker.get_upcoming_sequence()
-        self.assertEqual(len(upcoming), 1)
-        self.assertEqual(upcoming[0].last_seen_x, 380)
+    def test_first_detection_starts_recording(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.phase, Phase.RECORDING)
+        self.assertEqual(self.recorder.sequence, ["up"])
 
-    def test_different_directions_separate_tracks(self):
-        detections = [
-            Detection("up", 400, 50, 0.9, 30, 30),
-            Detection("down", 300, 50, 0.85, 30, 30),
-        ]
-        self.tracker.update(detections, timestamp=1.0)
-        upcoming = self.tracker.get_upcoming_sequence()
-        self.assertEqual(len(upcoming), 2)
+    def test_same_arrow_not_duplicated(self):
+        for _ in range(5):
+            self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.sequence, ["up"])
 
-    def test_hit_zone_triggers_action(self):
-        self.tracker.update([Detection("left", 100, 50, 0.9, 30, 30)], timestamp=1.0)
-        actions = self.tracker.get_hit_zone_arrows()
-        self.assertEqual(len(actions), 0)
+    def test_new_direction_appended(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.recorder.update([Detection("down", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.sequence, ["up", "down"])
 
-        self.tracker.update([Detection("left", 70, 50, 0.9, 30, 30)], timestamp=1.1)
-        actions = self.tracker.get_hit_zone_arrows()
-        self.assertEqual(len(actions), 1)
-        self.assertEqual(actions[0].direction, "left")
+    def test_records_full_sequence(self):
+        arrows = ["up", "right", "down", "left", "up"]
+        for direction in arrows:
+            for _ in range(3):
+                self.recorder.update([Detection(direction, 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.sequence, arrows)
 
-    def test_action_fires_only_once(self):
-        self.tracker.update([Detection("right", 70, 50, 0.9, 30, 30)], timestamp=1.0)
-        actions1 = self.tracker.get_hit_zone_arrows()
-        self.assertEqual(len(actions1), 1)
+    def test_no_arrow_transitions_to_ready(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.phase, Phase.RECORDING)
 
-        self.tracker.update([Detection("right", 60, 50, 0.9, 30, 30)], timestamp=1.1)
-        actions2 = self.tracker.get_hit_zone_arrows()
-        self.assertEqual(len(actions2), 0)
+        for _ in range(10):
+            self.recorder.update([])
+        self.assertEqual(self.recorder.phase, Phase.READY)
 
-    def test_upcoming_sorted_by_x(self):
-        detections = [
-            Detection("up", 500, 50, 0.9, 30, 30),
-            Detection("down", 200, 50, 0.9, 30, 30),
-            Detection("left", 350, 50, 0.9, 30, 30),
-        ]
-        self.tracker.update(detections, timestamp=1.0)
-        upcoming = self.tracker.get_upcoming_sequence()
-        xs = [t.last_seen_x for t in upcoming]
-        self.assertEqual(xs, sorted(xs))
+    def test_ready_preserves_sequence(self):
+        self.recorder.update([Detection("left", 100, 50, 0.9, 30, 30)])
+        self.recorder.update([Detection("right", 100, 50, 0.9, 30, 30)])
+        for _ in range(10):
+            self.recorder.update([])
+        self.assertEqual(self.recorder.phase, Phase.READY)
+        self.assertEqual(self.recorder.sequence, ["left", "right"])
 
-    def test_reset_clears_state(self):
-        self.tracker.update([Detection("up", 400, 50, 0.9, 30, 30)], timestamp=1.0)
-        self.tracker.reset()
-        self.assertEqual(len(self.tracker.get_upcoming_sequence()), 0)
+    def test_get_next_input(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.recorder.update([Detection("down", 100, 50, 0.9, 30, 30)])
+        for _ in range(10):
+            self.recorder.update([])
 
-    def test_expired_tracks_removed(self):
-        self.tracker.update([Detection("up", 400, 50, 0.9, 30, 30)], timestamp=1.0)
-        for i in range(10):
-            self.tracker.update([], timestamp=1.1 + i * 0.05)
-        upcoming = self.tracker.get_upcoming_sequence()
-        self.assertEqual(len(upcoming), 0)
+        self.recorder.start_input()
+        self.assertEqual(self.recorder.phase, Phase.INPUTTING)
+        self.assertEqual(self.recorder.get_next_input(), "up")
+        self.assertEqual(self.recorder.get_next_input(), "down")
+        self.assertIsNone(self.recorder.get_next_input())
+
+    def test_input_exhausted_returns_to_idle(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        for _ in range(10):
+            self.recorder.update([])
+
+        self.recorder.start_input()
+        self.recorder.get_next_input()
+        self.assertEqual(self.recorder.phase, Phase.IDLE)
+
+    def test_picks_highest_confidence(self):
+        self.recorder.update([
+            Detection("up", 100, 50, 0.7, 30, 30),
+            Detection("down", 100, 50, 0.9, 30, 30),
+        ])
+        self.assertEqual(self.recorder.sequence, ["down"])
+
+    def test_reset_clears_everything(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.recorder.reset()
+        self.assertEqual(self.recorder.phase, Phase.IDLE)
+        self.assertEqual(self.recorder.sequence, [])
+
+    def test_new_recording_after_idle(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        for _ in range(10):
+            self.recorder.update([])
+        self.recorder.start_input()
+        self.recorder.get_next_input()
+        self.assertEqual(self.recorder.phase, Phase.IDLE)
+
+        self.recorder.update([Detection("left", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.phase, Phase.RECORDING)
+        self.assertEqual(self.recorder.sequence, ["left"])
 
 
 if __name__ == "__main__":

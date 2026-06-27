@@ -19,9 +19,9 @@ class CaptureRegion:
 @dataclass
 class Config:
     capture_region: CaptureRegion = field(default_factory=CaptureRegion)
-    hit_zone_x: int = 80
     threshold: float = 0.65
     auto_delay_ms: int = 50
+    auto_input_interval_ms: int = 200
     template_dir: str = DEFAULT_TEMPLATE_DIR
     debug: bool = False
 
@@ -52,4 +52,5 @@ class Config:
         region_data = data.pop("capture_region", {})
         region = CaptureRegion(**region_data)
         data.pop("debug", None)
+        data.pop("hit_zone_x", None)
         return cls(capture_region=region, **data)

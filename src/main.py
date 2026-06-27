@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 
@@ -7,7 +8,7 @@ import cv2
 from src.config import Config
 from src.capture import ScreenCapture
 from src.detector import ArrowDetector
-from src.tracker import SequenceTracker
+from src.tracker import SequenceRecorder
 from src.output import DisplayOutput, AutoPlayOutput
 from src.calibrate import run_calibration, run_capture_mode
 
@@ -18,10 +19,11 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python -m src.main --calibrate       Run calibration wizard\n"
-            "  python -m src.main --mode display     Show arrows in overlay\n"
-            "  python -m src.main --mode auto        Auto-press arrow keys\n"
-            "  python -m src.main --mode auto --debug Show detection debug window\n"
+            "  python -m src.main --capture          Save screenshots during gameplay (F8)\n"
+            "  python -m src.main --calibrate         Run calibration wizard\n"
+            "  python -m src.main --mode display      Show recorded arrows in overlay\n"
+            "  python -m src.main --mode auto         Auto-input arrows after recording\n"
+            "  python -m src.main --mode display --debug  Show detection debug window\n"
         ),
     )
     parser.add_argument(
@@ -34,7 +36,7 @@ def parse_args():
     )
     parser.add_argument(
         "--mode", choices=["display", "auto"], default="display",
-        help="Output mode: 'display' shows arrows in overlay, 'auto' presses keys (default: display)",
+        help="Output mode: 'display' shows recorded sequence, 'auto' also inputs them (default: display)",
     )
     parser.add_argument(
         "--config", type=str, default=None,
@@ -60,10 +62,8 @@ def run_main_loop(config: Config, mode: str, debug: bool):
     r = config.capture_region
     print(f"--- Calibration Info ---")
     print(f"  Capture region: ({r.x}, {r.y}) size {r.width}x{r.height}")
-    print(f"  Hit zone X: {config.hit_zone_x}")
     print(f"  Threshold: {config.threshold}")
     for direction, path in config.template_paths.items():
-        import os
         exists = "OK" if os.path.exists(path) else "MISSING"
         print(f"  Template {direction}: {exists}")
     print(f"  Tip: If the game window moved since calibration, re-run --calibrate")
@@ -71,7 +71,7 @@ def run_main_loop(config: Config, mode: str, debug: bool):
 
     capture = ScreenCapture(config.capture_region)
     detector = ArrowDetector(config.template_paths, config.threshold)
-    tracker = SequenceTracker(config.hit_zone_x)
+    recorder = SequenceRecorder()
 
     if mode == "auto":
         output = AutoPlayOutput(delay_ms=config.auto_delay_ms)
@@ -105,9 +105,11 @@ def run_main_loop(config: Config, mode: str, debug: bool):
     frame_time = 1.0 / target_fps
 
     print(f"Dance Game Helper started in {mode.upper()} mode.")
+    print("Watches for arrows during the show phase, records them,")
+    print("and keeps the sequence visible for you to input.")
     print("Press F10 to quit.")
     if mode == "auto":
-        print("Press F9 to toggle auto-play on/off.")
+        print("Press F9 to toggle auto-input on/off.")
 
     try:
         while running:
@@ -115,14 +117,8 @@ def run_main_loop(config: Config, mode: str, debug: bool):
 
             frame = capture.grab_frame()
             detections = detector.detect(frame)
-            tracker.update(detections, loop_start)
-
-            upcoming = tracker.get_upcoming_sequence()
-            raw_directions = [d.direction for d in detections]
-            output.show(upcoming, raw_directions=raw_directions)
-
-            for arrow in tracker.get_hit_zone_arrows():
-                output.on_action(arrow)
+            recorder.update(detections)
+            output.update(recorder)
 
             if debug:
                 debug_frame = frame.copy()
@@ -145,11 +141,10 @@ def run_main_loop(config: Config, mode: str, debug: bool):
                         (det.x, det.y - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
                     )
-                cv2.line(
-                    debug_frame,
-                    (config.hit_zone_x, 0),
-                    (config.hit_zone_x, debug_frame.shape[0]),
-                    (0, 255, 255), 2,
+                phase_text = f"Phase: {recorder.phase.value} | Seq: {len(recorder.sequence)}"
+                cv2.putText(
+                    debug_frame, phase_text, (5, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2,
                 )
                 cv2.imshow("Debug - Arrow Detection", debug_frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
