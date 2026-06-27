@@ -20,7 +20,7 @@ class CaptureRegion:
 class Config:
     capture_region: CaptureRegion = field(default_factory=CaptureRegion)
     hit_zone_x: int = 80
-    threshold: float = 0.75
+    threshold: float = 0.65
     auto_delay_ms: int = 50
     template_dir: str = DEFAULT_TEMPLATE_DIR
     debug: bool = False

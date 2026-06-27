@@ -57,6 +57,18 @@ def run_main_loop(config: Config, mode: str, debug: bool):
         print("Run with --calibrate first to set up templates.")
         sys.exit(1)
 
+    r = config.capture_region
+    print(f"--- Calibration Info ---")
+    print(f"  Capture region: ({r.x}, {r.y}) size {r.width}x{r.height}")
+    print(f"  Hit zone X: {config.hit_zone_x}")
+    print(f"  Threshold: {config.threshold}")
+    for direction, path in config.template_paths.items():
+        import os
+        exists = "OK" if os.path.exists(path) else "MISSING"
+        print(f"  Template {direction}: {exists}")
+    print(f"  Tip: If the game window moved since calibration, re-run --calibrate")
+    print(f"------------------------")
+
     capture = ScreenCapture(config.capture_region)
     detector = ArrowDetector(config.template_paths, config.threshold)
     tracker = SequenceTracker(config.hit_zone_x)
@@ -106,7 +118,7 @@ def run_main_loop(config: Config, mode: str, debug: bool):
             tracker.update(detections, loop_start)
 
             upcoming = tracker.get_upcoming_sequence()
-            output.show(upcoming)
+            output.show(upcoming, detection_count=len(detections))
 
             for arrow in tracker.get_hit_zone_arrows():
                 output.on_action(arrow)

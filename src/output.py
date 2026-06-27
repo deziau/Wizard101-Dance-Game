@@ -19,9 +19,9 @@ class DisplayOutput:
     def __init__(self):
         self.overlay = ArrowOverlay()
 
-    def show(self, upcoming: list[TrackedArrow]) -> None:
+    def show(self, upcoming: list[TrackedArrow], detection_count: int = 0) -> None:
         directions = [t.direction for t in upcoming]
-        self.overlay.update_arrows(directions)
+        self.overlay.update_arrows(directions, detection_count)
 
     def on_action(self, arrow: TrackedArrow) -> None:
         pass
@@ -43,9 +43,9 @@ class AutoPlayOutput:
         self.enabled = True
         self.overlay = ArrowOverlay()
 
-    def show(self, upcoming: list[TrackedArrow]) -> None:
+    def show(self, upcoming: list[TrackedArrow], detection_count: int = 0) -> None:
         directions = [t.direction for t in upcoming]
-        self.overlay.update_arrows(directions)
+        self.overlay.update_arrows(directions, detection_count)
 
     def on_action(self, arrow: TrackedArrow) -> None:
         if not self.enabled:
