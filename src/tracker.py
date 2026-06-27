@@ -56,7 +56,12 @@ class SequenceRecorder:
                     self._input_index = 0
 
         elif self._phase == Phase.READY:
-            pass
+            if best is not None:
+                self._phase = Phase.RECORDING
+                self._sequence.clear()
+                self._current_arrow = best.direction
+                self._sequence.append(best.direction)
+                self._frames_without_arrow = 0
 
         elif self._phase == Phase.INPUTTING:
             if self._input_index >= len(self._sequence):

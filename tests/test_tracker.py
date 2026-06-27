@@ -96,6 +96,18 @@ class TestSequenceRecorder(unittest.TestCase):
         self.assertEqual(self.recorder.phase, Phase.RECORDING)
         self.assertEqual(self.recorder.sequence, ["left"])
 
+    def test_new_round_resets_from_ready(self):
+        self.recorder.update([Detection("up", 100, 50, 0.9, 30, 30)])
+        self.recorder.update([Detection("right", 100, 50, 0.9, 30, 30)])
+        for _ in range(10):
+            self.recorder.update([])
+        self.assertEqual(self.recorder.phase, Phase.READY)
+        self.assertEqual(self.recorder.sequence, ["up", "right"])
+
+        self.recorder.update([Detection("down", 100, 50, 0.9, 30, 30)])
+        self.assertEqual(self.recorder.phase, Phase.RECORDING)
+        self.assertEqual(self.recorder.sequence, ["down"])
+
 
 if __name__ == "__main__":
     unittest.main()
