@@ -9,7 +9,7 @@ from src.capture import ScreenCapture
 from src.detector import ArrowDetector
 from src.tracker import SequenceTracker
 from src.output import DisplayOutput, AutoPlayOutput
-from src.calibrate import run_calibration
+from src.calibrate import run_calibration, run_capture_mode
 
 
 def parse_args():
@@ -25,8 +25,12 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--capture", action="store_true",
+        help="Start screenshot capture mode (press F8 during gameplay to save screenshots)",
+    )
+    parser.add_argument(
         "--calibrate", action="store_true",
-        help="Run the calibration wizard to set up screen region and arrow templates",
+        help="Run the calibration wizard using a saved or live screenshot",
     )
     parser.add_argument(
         "--mode", choices=["display", "auto"], default="display",
@@ -163,6 +167,10 @@ def main():
     if args.threshold is not None:
         config.threshold = args.threshold
     config.debug = args.debug
+
+    if args.capture:
+        run_capture_mode()
+        return
 
     if args.calibrate:
         config = run_calibration(config)

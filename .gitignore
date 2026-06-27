@@ -6,6 +6,7 @@ venv/
 env/
 config.json
 templates/*.png
+captures/
 *.egg-info/
 dist/
 build/
