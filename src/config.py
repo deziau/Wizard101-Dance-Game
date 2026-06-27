@@ -19,7 +19,7 @@ class CaptureRegion:
 @dataclass
 class Config:
     capture_region: CaptureRegion = field(default_factory=CaptureRegion)
-    threshold: float = 0.65
+    threshold: float = 0.75
     auto_delay_ms: int = 50
     auto_input_interval_ms: int = 200
     template_dir: str = DEFAULT_TEMPLATE_DIR
