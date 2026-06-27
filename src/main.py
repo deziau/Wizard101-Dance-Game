@@ -118,7 +118,8 @@ def run_main_loop(config: Config, mode: str, debug: bool):
             tracker.update(detections, loop_start)
 
             upcoming = tracker.get_upcoming_sequence()
-            output.show(upcoming, detection_count=len(detections))
+            raw_directions = [d.direction for d in detections]
+            output.show(upcoming, raw_directions=raw_directions)
 
             for arrow in tracker.get_hit_zone_arrows():
                 output.on_action(arrow)

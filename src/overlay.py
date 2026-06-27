@@ -52,18 +52,15 @@ class ArrowOverlay:
         fnt = tkfont.Font(family="Consolas", size=24, weight="bold")
         self._label.configure(font=fnt)
 
-    def update_arrows(self, directions: list[str], detection_count: int = 0) -> None:
-        if not directions:
-            if detection_count > 0:
-                self._label.configure(
-                    text=f"Detected: {detection_count} arrow(s)...",
-                    fg="#AAAAFF",
-                )
-            else:
-                self._label.configure(text="Waiting for arrows...", fg="#e0e0e0")
-            return
-        text = "  ".join(ARROW_SYMBOLS.get(d, "?") for d in directions)
-        self._label.configure(text=text, fg="#FFFFFF")
+    def update_arrows(self, directions: list[str], raw_directions: list[str] | None = None) -> None:
+        if directions:
+            text = "  ".join(ARROW_SYMBOLS.get(d, "?") for d in directions)
+            self._label.configure(text=text, fg="#FFFFFF")
+        elif raw_directions:
+            text = "  ".join(ARROW_SYMBOLS.get(d, "?") for d in raw_directions)
+            self._label.configure(text=text, fg="#AAAAFF")
+        else:
+            self._label.configure(text="Waiting for arrows...", fg="#e0e0e0")
 
     def set_status(self, text: str) -> None:
         self._status.configure(text=text)
